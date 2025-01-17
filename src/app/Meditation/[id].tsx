@@ -1,169 +1,110 @@
-import { Text, View, Pressable } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
-import { meditations } from "@/data";
-import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
+import { Link, router, useLocalSearchParams } from 'expo-router';
+import { Text, View, Pressable } from 'react-native';
+import { meditations } from '@/data';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { SafeAreaView } from "react-native-safe-area-context";
+import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import Slider from "@react-native-community/slider";
-import React, { useState, useEffect } from "react";
-import { Audio } from "expo-av";
-import { useFocusEffect } from '@react-navigation/native';
+import Slider from '@react-native-community/slider';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
-// Convert seconds to MM:SS format
-const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`;
-};
+import audio from '@assets/meditations/audio1.mp3';
+import AnimatedBackground from '@/components/AnimatedBackground';
 
 export default function MeditationDetails() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-    const [sound, setSound] = useState<Audio.Sound | null>(null);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [duration, setDuration] = useState(0);
-    const audioFile = require("@assets/meditations/audio1.mp3");
+  const player = useAudioPlayer(audio);
+  const status = useAudioPlayerStatus(player);
 
-    useEffect(() => {
-        const loadAudio = async () => {
-            try {
-                // Set the audio mode to allow playback even when the phone is on silent mode
-                await Audio.setAudioModeAsync({
-                    playsInSilentModeIOS: true,
-                    allowsRecordingIOS: false,
-                    staysActiveInBackground: true,
-                });
+  const meditation = meditations.find((m) => m.id === Number(id));
 
-                const { sound } = await Audio.Sound.createAsync(audioFile);
-                sound.setOnPlaybackStatusUpdate((status) => {
-                    if (status.isLoaded) {
-                        setCurrentTime(status.positionMillis ? status.positionMillis / 1000 : 0); // in seconds
-                        setDuration(status.durationMillis ? status.durationMillis / 1000 : 0); // in seconds
-                    }
-                });
-                setSound(sound);
-            } catch (error) {
-                console.error("Error loading audio:", error);
-            }
-        };
+  const formatSeconds = (milliseconds: number) => {
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor((milliseconds % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
-        loadAudio();
+  if (!meditation) {
+    return <Text>Meditation not found!</Text>;
+  }
 
-        // Cleanup the sound object when the component unmounts
-        return () => {
-            if (sound) {
-                sound.unloadAsync();
-                setIsPlaying(false); // Ensure audio is stopped when going back
-            }
-        };
-    }, []);
+  return (
+    <SafeAreaView className="bg-orange-400 flex-1 p-2 justify-between">
+      <AnimatedBackground />
+      {/* Page content */}
+      <View className="flex-1">
+        {/* Top part of the screen */}
+        <View className="flex-1">
+          {/* Header */}
+          <View className="flex-row items-center justify-between p-10">
+            <AntDesign name="infocirlceo" size={24} color="black" />
 
-    const togglePlayPause = async () => {
-        if (sound) {
-            try {
-                if (isPlaying) {
-                    await sound.pauseAsync();
-                    setIsPlaying(false);
-                    console.log("Audio paused.");
-                } else {
-                    await sound.playAsync();
-                    setIsPlaying(true);
-                    console.log("Audio playing.");
-                }
-            } catch (error) {
-                console.error("Error during audio playback:", error);
-            }
-        }
-    };
-
-    const onSliderValueChange = async (value: number) => {
-        if (sound) {
-            const positionMillis = value * 1000; // Convert to milliseconds
-            await sound.setPositionAsync(positionMillis); // Seek to the position
-        }
-    };
-
-    const meditation = meditations.find((m) => m.id === Number(id));
-    if (!meditation) {
-        return <Text>Not found!</Text>;
-    }
-
-    // Pause and reset audio when the user navigates away from the screen
-    useFocusEffect(
-        React.useCallback(() => {
-            // This is triggered when the screen gains focus
-            return () => {
-                // This is triggered when the screen loses focus (goes back)
-                if (sound) {
-                    sound.pauseAsync();
-                    sound.setPositionAsync(0); // Reset audio to the beginning
-                    setIsPlaying(false);
-                    console.log("Audio stopped and reset.");
-                }
-            };
-        }, [sound])
-    );
-
-    return (
-        <SafeAreaView className="bg-orange-400 flex-1 p-2">
-            <View className="flex-1">
-                <View className="flex-1">
-                    <View className="flex-row justify-between p-10 items-center">
-                        <AntDesign name="infocirlceo" size={30} color="black" />
-                        <AntDesign
-                            onPress={() => router.back()}
-                            name="close"
-                            size={30}
-                            color="black"
-                        />
-                    </View>
-                    <Text className="text-3xl mt-10 text-center text-zinc-800 font-semibold">
-                        {meditation?.title}
-                    </Text>
-                </View>
-
-                <View className="flex-1 items-center justify-center ">
-                    <Pressable
-                        onPress={togglePlayPause}
-                        className="bg-zinc-700 self-center w-24 aspect-square items-center justify-center rounded-full"
-                    >
-                        <FontAwesome6
-                            name={isPlaying ? "pause" : "play"}
-                            size={26}
-                            color="snow"
-                        />
-                    </Pressable>
-                </View>
-
-                <View className="flex-1">
-                    <View className="p-5 mt-auto">
-                        <View className="flex-row justify-between">
-                            <MaterialCommunityIcons name="cog-outline" size={24} color='#3A3937'/>
-                            <MaterialIcons name="airplay" size={24} color='#3A3937'/>
-                        </View>
-
-                        <View>
-                            <Slider
-                                style={{ width: '100%', height: 40 }}
-                                minimumValue={0}
-                                maximumValue={duration}
-                                minimumTrackTintColor="#3A3937"
-                                maximumTrackTintColor="#3A393755"
-                                thumbTintColor="#3A3937"
-                                value={currentTime}
-                                onValueChange={onSliderValueChange}
-                            />
-                            <View className="flex-row justify-between mt-2">
-                                <Text className="text-xs text-zinc-600">{formatTime(currentTime)}</Text>
-                                <Text className="text-xs text-zinc-600">{formatTime(duration)}</Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
+            <View className="bg-zinc-800 p-2 rounded-md">
+              <Text className="text-zinc-100 font-semibold">
+                Today's meditation
+              </Text>
             </View>
-        </SafeAreaView>
-    );
+
+            <AntDesign
+              onPress={() => router.back()}
+              name="close"
+              size={26}
+              color="black"
+            />
+          </View>
+
+          <Text className="text-3xl mt-20 text-center text-zinc-800 font-semibold">
+            {meditation?.title}
+          </Text>
+        </View>
+
+        {/* Play/Pause Button */}
+        <Pressable
+          onPress={() => (player.playing ? player.pause() : player.play())}
+          className="bg-zinc-800 self-center w-20 aspect-square rounded-full items-center justify-center"
+        >
+          <FontAwesome6
+            name={status.playing ? 'pause' : 'play'}
+            size={24}
+            color="snow"
+          />
+        </Pressable>
+
+        {/* Bottom part of the screen */}
+        <View className="flex-1">
+          {/* Footer: Player */}
+          <View className="p-5 mt-auto gap-5">
+            <View className="flex-row justify-between">
+              <MaterialIcons name="airplay" size={24} color="#3A3937" />
+              <MaterialCommunityIcons
+                name="cog-outline"
+                size={24}
+                color="#3A3937"
+              />
+            </View>
+            {/* Playback indicator */}
+            <Slider
+              style={{ width: '100%', height: 3 }}
+              value={status.currentTime / status.duration}
+              onSlidingComplete={(value) =>
+                player.seekTo(value * status.duration)
+              }
+              minimumValue={0}
+              maximumValue={1}
+              maximumTrackTintColor="#3A393755"
+              minimumTrackTintColor="#3A3937"
+              thumbTintColor="#3A3937"
+            />
+            {/* Times */}
+            <View className="flex-row justify-between">
+              <Text>{formatSeconds(status.currentTime)}</Text>
+              <Text>{formatSeconds(status.duration)}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
 }
